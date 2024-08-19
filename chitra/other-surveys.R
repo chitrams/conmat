@@ -62,13 +62,18 @@ thailand_survey <- readRDS("./data/thailand_survey.rda")
 
 #%% First clean, China ------
 
-# Select contact data only for China
+# Clean data for China
 
 contact_data <- china_survey$contacts
+participant_data <- china_survey$participants
+
+complete_data <- left_join(
+  contact_data, participant_data, by = "part_id"
+)
 
 # impute contact ages according to the required method
 
-contact_data_imputed <- contact_data %>%
+contact_data_imputed <- complete_data %>%
   dplyr::mutate(
     cnt_age_sampled = floor(
       # suppress warnings about NAs in runif
@@ -89,16 +94,9 @@ contact_data_imputed <- contact_data %>%
     )
   )
 
-participant_info <- china_survey$participants %>% 
-  select(part_id, part_age, part_gender)
-
-contact_data_participant_info <- left_join(
-  contact_data_imputed, participant_info, by = "part_id"
-)
-
 # filter out any participants with missing contact ages or settings (can't
 # just remove the contacts as that will bias the count)
-contact_data_filtered <- contact_data_participant_info %>%
+contact_data_filtered <- contact_data_imputed %>%
   dplyr::group_by(part_id) %>%
   dplyr::mutate(
     missing_any_contact_age = any(is.na(cnt_age_exact)),
@@ -118,39 +116,52 @@ contact_data_filtered <- contact_data_participant_info %>%
     !missing_any_contact_setting
   )
 
-#TODO Create new setting column here?
-# Sum all contacts,
-# grouping by age to and age from,
-# for each setting. 
+# Filter: home only -----
 
-# get contacts by setting (keeping 0s, so we can record 0 contacts for some individuals)
-temp <- contact_data_filtered %>%
-  dplyr::mutate(contacted = cnt_home
-  )
+raw_contact_data_home <- contact_data_filtered %>% 
+  mutate(
+    contacted = cnt_home
+    )
 
-contact_data_setting <- contact_data_filtered %>%
+sum_contacts <- function(indata, setting) {
   
-  #TODO Add a group by here? home, work, etc (contacted) before next cleaning steps
+  ages <- 0:100
   
-  # A: Look at get_polymod_setting_data to recombine.
+  outdata <- indata %>%
+    dplyr::select(
+      part_id,
+      age_from = part_age,
+      age_to = cnt_age,
+      contacted
+    ) %>%
+    tidyr::complete(
+      tidyr::nesting(age_from, part_id),
+      age_to = ages,
+      fill = list(contacted = 0)
+    ) %>%
+    dplyr::group_by(
+      age_from,
+      age_to
+    ) %>%
+    dplyr::summarise(
+      contacts = sum(contacted),
+      participants = dplyr::n_distinct(part_id),
+      .groups = "drop"
+    ) %>%
+    # add the setting information, so models can act differently for each
+    # setting
+    dplyr::mutate(
+      setting = setting,
+      .before = dplyr::everything()
+    )
   
-  dplyr::select(
-    part_id,
-    age_from = part_age,
-    age_to = cnt_age,
-    contacted
-  ) %>%
-  tidyr::complete(
-    tidyr::nesting(age_from, part_id),
-    age_to = ages,
-    fill = list(contacted = 0)
-  ) %>%
-  dplyr::group_by(
-    age_from,
-    age_to
-  ) %>%
-  dplyr::summarise(
-    contacts = sum(contacted),
-    participants = dplyr::n_distinct(part_id),
-    .groups = "drop"
-  )
+  outdata
+}
+
+contact_home <- sum_contacts(raw_contact_data_home, setting = "home")
+
+contact_data_filtered %>% select(starts_with("cnt_"))
+
+settings_china <- c(cnt_home, cnt_work, cnt_school, 
+              cnt_transport, cnt_leisure, 
+              cnt_otherplace, cnt_otherpublicplace)
