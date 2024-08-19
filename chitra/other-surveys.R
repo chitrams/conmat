@@ -132,6 +132,8 @@ contact_data_setting <- contact_data_filtered %>%
   
   #TODO Add a group by here? home, work, etc (contacted) before next cleaning steps
   
+  # A: Look at get_polymod_setting_data to recombine.
+  
   dplyr::select(
     part_id,
     age_from = part_age,
