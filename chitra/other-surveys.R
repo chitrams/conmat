@@ -23,47 +23,18 @@ polymod_pop <- get_polymod_population()
 other_surveys <- socialmixr::list_surveys()
 View(other_surveys)
 
-# Different household structures;
-# Somaliland's survey covers internally displaced peoples
-somaliland_survey <- get_survey("https://doi.org/10.5281/zenodo.7071876")
-
-# Warning message:
-#   In load_survey(files) :
-#   Could not merge C:\Users\CSARAS~1\AppData\Local\Temp\RtmpesxRsI/espicc_somaliland_digaale_survey_population.csv
-
 # Thailand 2015
 thailand_survey <- get_survey("https://doi.org/10.5281/zenodo.4739777")
 
-# 2019, this one is a good survey
+# China 2019
 china_survey <- get_survey("https://doi.org/10.5281/zenodo.3878754") 
 
 saveRDS(thailand_survey, "./data/thailand_survey.rda")
 saveRDS(china_survey, "./data/china_survey.rda")
 
-# Similar to POLYMOD
-# BE, CH, NL, UK during Covid
-comix_survey <- get_survey("https://doi.org/10.5281/zenodo.11154066")
-saveRDS(comix_survey, "./data/comix_survey.rda")
-
-# CoMix 2.0 arguably has a greater "mix" of the types of households?
-# AT, BE, DK, HR (Croatia), EE (Estonia), GR, IT, PL, PT over covid
-# Add these populations together? Or just grab one country?
-comixv2_survey <- get_survey("https://zenodo.org/records/7331926")
-saveRDS(comixv2_survey, "./data/comixV2_survey.rda")
-# But there are issues: warning messages with merging. 
-
 # UK 2022 (CoMix)
 uk_survey <- get_survey("https://doi.org/10.5281/zenodo.6542524")
 saveRDS(uk_survey, "./data/uk_survey.rda")
-
-# China and comix (V2) might be the least problematic to use.
-# No warning messages when "compiling", whereas Somaliland had issues.
-
-# Surveys to use:
-# To start small:
-# - China 2019
-# - Thailand 2015
-# - UK 2022
 
 #%% Load test data -----
 
@@ -136,7 +107,7 @@ china_pop_cm <- as_conmat_population(
 
 #%% Fit to models -----
 
-# Polymod example
+# POLYMOD example
 mpolymod_home <- fit_single_contact_model(
   contact_data = polymod_home_contact,
   population = polymod_pop
