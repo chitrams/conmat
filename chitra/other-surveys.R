@@ -68,79 +68,30 @@ saveRDS(uk_survey, "./data/uk_survey.rda")
 #%% Load test data -----
 
 china_survey <- readRDS("./data/china_survey.rda")
-comix_survey <- readRDS("./data/comixv2_survey.rda")
 thailand_survey <- readRDS("./data/thailand_survey.rda")
+uk_survey <- readRDS("./data/uk_survey.rda")
 
-# Try -----
+# Load functions
+source("./chitra/functions.R")
 
-#%% First clean, China ------
+# Cleaned attempt
 
-# Clean data for China
+china_imputed <- impute_contact_data(china_survey)
 
-contact_data <- china_survey$contacts
-participant_data <- china_survey$participants
+china_imputed %>% 
+  select(starts_with("cnt_")) %>% 
+  colnames()
 
-complete_data <- left_join(
-  contact_data, participant_data, by = "part_id"
-)
+thailand_complete_data <- impute_contact_data(thailand_survey)
 
-# impute contact ages according to the required method
+thailand_complete_data %>% 
+  select(starts_with("cnt_")) %>% 
+  colnames()
 
-contact_data_imputed <- complete_data %>%
-  dplyr::mutate(
-    cnt_age_sampled = floor(
-      # suppress warnings about NAs in runif
-      suppressWarnings(
-        stats::runif(
-          n = dplyr::n(),
-          min = cnt_age_est_min,
-          max = cnt_age_est_max + 1
-        )
-      )
-    ),
-    cnt_age_mean = floor(
-      cnt_age_est_min + (cnt_age_est_max + 1 - cnt_age_est_min) / 2
-    ),
-    cnt_age = dplyr::case_when(
-      !is.na(cnt_age_exact) ~ as.numeric(cnt_age_exact),
-      TRUE ~ NA_real_
-    )
-  )
-
-# filter out any participants with missing contact ages or settings (can't
-# just remove the contacts as that will bias the count)
-contact_data_filtered <- contact_data_imputed %>%
-  dplyr::group_by(part_id) %>%
-  dplyr::mutate(
-    missing_any_contact_age = any(is.na(cnt_age_exact)),
-    missing_any_contact_setting = any(
-        is.na(cnt_home) |
-        is.na(cnt_work) |
-        is.na(cnt_school) |
-        is.na(cnt_transport) |
-        # is.na(cnt_leisure) |
-        is.na(cnt_otherplace)
-    )
-  ) %>%
-  dplyr::ungroup() %>%
-  dplyr::filter(
-    !is.na(part_age),
-    !missing_any_contact_age,
-    !missing_any_contact_setting
-  )
+# Attempt: China ------
 
 
-# Find all the settings within the China survey
-contact_data_filtered %>% select(starts_with("cnt_"))
-
-settings_china <- c(cnt_home, cnt_work, cnt_school, 
-                    cnt_transport, cnt_leisure, 
-                    cnt_otherplace, cnt_otherpublicplace)
-
-# Only works for home, school, and work
-# "Other" needs to be manually done
-
-# Filter: home only -----
+#%% Filter: home only -----
 
 sum_contacts <- function(setting, data) {
   
@@ -225,7 +176,7 @@ china_pop_cm <- as_conmat_population(
   population = population
 )
 
-# Fit to models -----
+#%% Fit to models -----
 
 # Polymod example
 mpolymod_home <- fit_single_contact_model(
@@ -233,7 +184,7 @@ mpolymod_home <- fit_single_contact_model(
   population = polymod_pop
 )
 
-#%% Home ----
+#%%%% Home ----
 
 mchina_home <- fit_single_contact_model(
   contact_data = contact_home,
@@ -250,7 +201,7 @@ china_home_plot <- scm_china %>%
   predictions_to_matrix() %>% 
   autoplot()
 
-#%% Work ----
+#%%%% Work ----
 
 mchina_work <- fit_single_contact_model(
   contact_data = contact_work,
@@ -268,7 +219,7 @@ china_work_plot <- scm_china_work %>%
   predictions_to_matrix() %>% 
   autoplot()
 
-#%% School ----
+#%%%% School ----
 
 mchina_school <- fit_single_contact_model(
   contact_data = contact_school,
