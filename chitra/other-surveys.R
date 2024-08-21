@@ -74,72 +74,30 @@ uk_survey <- readRDS("./data/uk_survey.rda")
 # Load functions
 source("./chitra/functions.R")
 
-# Cleaned attempt
+# Clean all data ----
 
 china_imputed <- impute_contact_data(china_survey)
+china_imputed %>% filter_settings()
 
-china_imputed %>% 
-  select(starts_with("cnt_")) %>% 
-  colnames()
+thailand_imputed <- impute_contact_data(thailand_survey)
+thailand_imputed %>% filter_settings()
 
-thailand_complete_data <- impute_contact_data(thailand_survey)
+uk_imputed <- impute_contact_data(uk_survey)
+uk_imputed %>% filter_settings()
 
-thailand_complete_data %>% 
-  select(starts_with("cnt_")) %>% 
-  colnames()
+uk_imputed %>% 
+  select(starts_with("cnt_") & !contains("age") & !contains("gender")) %>% 
+  summarise(across(everything(), ~table(.)))
 
-# Attempt: China ------
+china_filtered <- filter_china(china_imputed)
+thailand_filtered <- filter_thailand(thailand_imputed)
+uk_filtered <- filter_uk(uk_imputed)
 
-
-#%% Filter: home only -----
-
-sum_contacts <- function(setting, data) {
-  
-  ages <- 0:100
-  indata <- data
-  
-  #TODO How do I make the following work?
-  # The error msg says: object `cnt_home` not found, even after embracing. 
-  # indata <- contact_data_filtered %>%
-  #   mutate(
-  #     contacted = {{ setting }}
-  #   )
-  
-  outdata <- indata %>%
-    dplyr::select(
-      part_id,
-      age_from = part_age,
-      age_to = cnt_age,
-      contacted
-    ) %>%
-    tidyr::complete(
-      tidyr::nesting(age_from, part_id),
-      age_to = ages,
-      fill = list(contacted = 0)
-    ) %>%
-    dplyr::group_by(
-      age_from,
-      age_to
-    ) %>%
-    dplyr::summarise(
-      contacts = sum(contacted),
-      participants = dplyr::n_distinct(part_id),
-      .groups = "drop"
-    ) %>%
-    # add the setting information, so models can act differently for each
-    # setting
-    dplyr::mutate(
-      setting = setting,
-      .before = dplyr::everything()
-    )
-  
-  outdata
-}
-
-#TODO Ask Nick: if the mutate is within the fn, the following doesn't work:
+#TODO Ask Nick: if the mutate is within the fn, the following doesn't work.
+# See functions.R > sum_contacts_by_setting
 # contact_home <- sum_contacts(cnt_home)
 
-#%% Contact surveys to put into model fit -----
+#%% Clean contact surveys to put into model fit -----
 raw_contact_data_home <- contact_data_filtered %>% 
   mutate(
     contacted = cnt_home
