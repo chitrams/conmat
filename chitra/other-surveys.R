@@ -123,9 +123,26 @@ raw_contact_data_home <- contact_data_filtered %>%
     contacted = cnt_home
     )
 
-sum_contacts <- function(indata, setting) {
+# Find all the settings within the China survey
+contact_data_filtered %>% select(starts_with("cnt_"))
+
+settings_china <- c(cnt_home, cnt_work, cnt_school, 
+                    cnt_transport, cnt_leisure, 
+                    cnt_otherplace, cnt_otherpublicplace)
+
+# Only works for home, school, and work
+# "Other" needs to be manually done
+
+sum_contacts <- function(setting) {
   
   ages <- 0:100
+  
+  #TODO How do I make the following work?
+  # The error msg says: object `cnt_home` not found, even after embracing. 
+  indata <- contact_data_filtered %>% 
+    mutate(
+      contacted = pick(setting)
+    )
   
   outdata <- indata %>%
     dplyr::select(
@@ -158,10 +175,7 @@ sum_contacts <- function(indata, setting) {
   outdata
 }
 
-contact_home <- sum_contacts(raw_contact_data_home, setting = "home")
+contact_home <- sum_contacts(cnt_home)
 
-contact_data_filtered %>% select(starts_with("cnt_"))
 
-settings_china <- c(cnt_home, cnt_work, cnt_school, 
-              cnt_transport, cnt_leisure, 
-              cnt_otherplace, cnt_otherpublicplace)
+
