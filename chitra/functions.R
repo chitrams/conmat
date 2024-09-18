@@ -139,17 +139,20 @@ sum_contacts_by_setting <- function(in_data, setting) {
 }
 
 
-sum_contacts <- function(setting, data) {
+sum_contacts <- function(data, setting) {
   
   ages <- 0:100
-  indata <- data
   
-  #TODO How do I make the following work?
-  # The error msg says: object `cnt_home` not found, even after embracing. 
-  # indata <- contact_data_filtered %>%
-  #   mutate(
-  #     contacted = {{ setting }}
-  #   )
+  indata <- data %>%
+    dplyr::mutate(
+      contacted = dplyr::case_when(
+        setting == "all" ~ 1L,
+        setting == "home" ~ cnt_home,
+        setting == "school" ~ cnt_school,
+        setting == "work" ~ cnt_work,
+        setting == "other" ~ pmax(cnt_transport, cnt_leisure, cnt_otherplace),
+      )
+    )
   
   outdata <- indata %>%
     dplyr::select(

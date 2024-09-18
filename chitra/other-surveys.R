@@ -69,10 +69,7 @@ uk_filtered <- filter_uk(uk_imputed)
 # contact_home <- sum_contacts(cnt_home)
 
 #%% Clean contact surveys to put into model fit -----
-raw_contact_data_home <- contact_data_filtered %>% 
-  mutate(
-    contacted = cnt_home
-  )
+raw_contact_data_home <- sum_contacts(contact_data_filtered)
 contact_home <- sum_contacts("home", raw_contact_data_home)
 
 raw_contact_data_school <- contact_data_filtered %>% 
