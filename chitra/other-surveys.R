@@ -29,12 +29,12 @@ thailand_survey <- get_survey("https://doi.org/10.5281/zenodo.4739777")
 # China 2019
 china_survey <- get_survey("https://doi.org/10.5281/zenodo.3878754") 
 
-saveRDS(thailand_survey, "./data/thailand_survey.rda")
-saveRDS(china_survey, "./data/china_survey.rda")
+#saveRDS(thailand_survey, "./data/thailand_survey.rda")
+#saveRDS(china_survey, "./data/china_survey.rda")
 
 # UK 2022 (CoMix)
 uk_survey <- get_survey("https://doi.org/10.5281/zenodo.6542524")
-saveRDS(uk_survey, "./data/uk_survey.rda")
+#saveRDS(uk_survey, "./data/uk_survey.rda")
 
 #%% Load test data -----
 
@@ -69,29 +69,34 @@ uk_filtered <- filter_uk(uk_imputed)
 # contact_home <- sum_contacts(cnt_home)
 
 #%% Clean contact surveys to put into model fit -----
-raw_contact_data_home <- sum_contacts(contact_data_filtered)
-contact_home <- sum_contacts("home", raw_contact_data_home)
-
-raw_contact_data_school <- contact_data_filtered %>% 
-  mutate(
-    contacted = cnt_school
+get_contacts_from_survey <- function(survey) {
+  contact_home <- sum_contacts(survey, "home")
+  
+  contact_school <- survey |>
+    mutate(contacted = cnt_school) |>
+    sum_contacts("school")
+  
+  contact_work <- survey |>
+    mutate(contacted = cnt_work) |>
+    sum_contacts("work")
+  
+  contact_other <- survey |>
+    rowwise() |>
+    mutate(
+      contacted = max(c_across(any_of(c("cnt_transport", "cnt_leisure", "cnt_otherplace", "cnt_otherpublicplace"))))
+    ) |>
+    sum_contacts("other")
+  
+  list(
+    "home" = contact_home,
+    "work" = contact_work,
+    "school" = contact_school,
+    "other" = contact_other
   )
-contact_school <- sum_contacts("school", raw_contact_data_school)
+}
 
-raw_contact_data_work <- contact_data_filtered %>% 
-  mutate(
-    contacted = cnt_work
-  )
-contact_work <- sum_contacts("work", raw_contact_data_work)
 
-raw_contact_data_other <- contact_data_filtered %>% 
-  mutate(
-    contacted = pmax(cnt_transport, cnt_leisure, 
-                     cnt_otherplace, cnt_otherpublicplace),
-  )
-contact_other <- sum_contacts("other", raw_contact_data_other)
 
-rm(list = ls(pattern = "raw_contact_data_"))
 
 # Upload population data from UNPD
 
@@ -103,64 +108,82 @@ china_pop_cm <- as_conmat_population(
 )
 
 #%% Fit to models -----
+fit_contact_singlesetting <- function(model, population, ...) {
+  model <- fit_single_contact_model(
+    contact_data = model,
+    population = population,
+    ...
+  )
+  
+  predict_contacts(
+    model = model,
+    population = population,
+    age_breaks = c(seq(0, 80, by = 5), Inf)
+  )
+}
 
-# POLYMOD example
-mpolymod_home <- fit_single_contact_model(
-  contact_data = polymod_home_contact,
-  population = polymod_pop
+fit_contacts <- function(models, population) {
+  home <- fit_contact_singlesetting(models$home, population)
+  
+  work <- fit_contact_singlesetting(models$work, population, work_demographics = conmat_original_work_demographics)
+  
+  school <- fit_contact_singlesetting(models$school, population, school_demographics = conmat_original_school_demographics)
+  
+  other <- fit_contact_singlesetting(models$other, population)
+  
+  list(
+    "home" = home,
+    "work" = work,
+    "school" = school,
+    "other" = other
+  )
+  
+}
+
+china_survey_data <- get_contacts_from_survey(china_filtered)
+thailand_survey_data <- get_contacts_from_survey(thailand_filtered)
+polymod_survey_data <- list(
+  "home" = get_polymod_contact_data("home"),
+  "work" =  get_polymod_contact_data("work"),
+  "school" = get_polymod_contact_data("school"),
+  "other" = get_polymod_contact_data("other")
 )
 
-#%%%% Home ----
+china_china <- fit_contacts(china_survey_data, china_pop_cm)
+thailand_china <- fit_contacts(thailand_survey_data, china_pop_cm)
+polymod_china <- fit_contacts(polymod_survey_data, china_pop_cm)
 
-mchina_home <- fit_single_contact_model(
-  contact_data = contact_home,
-  population = china_pop_cm
-)
+fit_list <- list("china" = china_china, "thailand" = thailand_china, "polymod" = polymod_china)
 
-scm_china <- predict_contacts(
-  model = mchina_home,
-  population = china_pop_cm,
-  age_breaks = c(seq(0, 80, by = 5), Inf)
-)
+plot_comparisons <- function(fit_list, settings) {
+  fit_names <- names(fit_list)
+  
+  home <- map2_dfr(fit_list, fit_names, .f = function(x, y) { 
+    x$home |> mutate(survey_location = y) } 
+  ) |> mutate(setting = "home")
+  
+  work <- map2_dfr(fit_list, fit_names, .f = function(x, y) { 
+    x$work |> mutate(survey_location = y) } 
+  ) |> mutate(setting = "work")
+  
+  school <- map2_dfr(fit_list, fit_names, .f = function(x, y) { 
+    x$school |> mutate(survey_location = y) } 
+  ) |> mutate(setting = "school")
+  
+  all_settings <- bind_rows(
+    home, work, school
+  )
+  
+  all_settings |>
+    filter(setting %in% settings) |>
+    ggplot(aes(x=age_group_from, y = age_group_to, fill = contacts)) +
+    geom_tile() +
+    coord_fixed() +
+    scale_fill_distiller(direction = 1, trans = "sqrt") +
+    theme_minimal() +
+    theme(axis.text = element_text(size = 6, angle = 45, hjust = 1)) +
+    facet_grid(setting ~ survey_location) +
+    labs(x = "Age (from)", y = "Age (to)", fill = "Contacts")
+}
 
-china_home_plot <- scm_china %>% 
-  predictions_to_matrix() %>% 
-  autoplot()
-
-#%%%% Work ----
-
-mchina_work <- fit_single_contact_model(
-  contact_data = contact_work,
-  population = china_pop_cm,
-  work_demographics = conmat_original_work_demographics
-)
-
-scm_china_work <- predict_contacts(
-  model = mchina_work,
-  population = china_pop_cm,
-  age_breaks = c(seq(0, 80, by = 5), Inf)
-)
-
-china_work_plot <- scm_china_work %>% 
-  predictions_to_matrix() %>% 
-  autoplot()
-
-#%%%% School ----
-
-mchina_school <- fit_single_contact_model(
-  contact_data = contact_school,
-  population = china_pop_cm,
-  school_demographics = conmat_original_school_demographics
-)
-
-scm_china_school <- predict_contacts(
-  model = mchina_school,
-  population = china_pop_cm,
-  age_breaks = c(seq(0, 80, by = 5), Inf)
-)
-
-china_school_plot <- scm_china_school %>% 
-  predictions_to_matrix() %>% 
-  autoplot()
-
-china_school_plot
+plot_comparisons(fit_list[c("china", "polymod")], settings = c("home", "work", "school"))
